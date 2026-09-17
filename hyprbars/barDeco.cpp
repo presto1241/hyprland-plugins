@@ -715,11 +715,13 @@ void CHyprBar::updateHoverReveal(Vector2D coords) {
     bool       wantReveal;
 
     if (m_bHoverRevealed) {
-        // stay open across the full bar height, anchored to where the window's top edge was
-        // when it opened - NOT the live assigned box, which lags a frame behind the reveal
-        // toggling the reserved space and would otherwise snap shut immediately.
+        // stay open across the full bar height. The bar renders ABOVE the window's content
+        // top (the reserved space is added there, content itself doesn't move), so the zone
+        // spans upward from the anchor, not into the content below it. Anchored to where the
+        // window's top edge was when it opened - NOT the live assigned box, which lags a frame
+        // behind the reveal toggling the reserved space and would otherwise snap shut immediately.
         const auto HEIGHT = g_pGlobalState->config.barHeight->value();
-        wantReveal         = VECINRECT(coords, m_vHoverAnchor.x, m_vHoverAnchor.y, m_vHoverAnchor.x + WINSIZE.x, m_vHoverAnchor.y + HEIGHT);
+        wantReveal         = VECINRECT(coords, m_vHoverAnchor.x, m_vHoverAnchor.y - HEIGHT, m_vHoverAnchor.x + WINSIZE.x, m_vHoverAnchor.y);
     } else {
         // collapsed: only a thin strip at the window's own top edge wakes it up
         const auto MARGIN = g_pGlobalState->config.hoverRevealMargin->value();
