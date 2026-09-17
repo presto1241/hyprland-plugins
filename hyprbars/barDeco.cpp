@@ -52,6 +52,12 @@ CHyprBar::CHyprBar(PHLWINDOW pWindow) : IHyprWindowDecoration(pWindow) {
     Animation::mgr()->createAnimation(configColor(g_pGlobalState->config.barColor->value()), m_cRealBarColor, Config::animationTree()->getAnimationPropertyConfig("border"),
                                       pWindow, AVARDAMAGE_NONE);
     m_cRealBarColor->setUpdateCallback([&](auto) { damageEntire(); });
+
+    // fades the bar's own contents in/out on hover_to_reveal - deliberately separate from the
+    // reserved-space toggle in getPositioningInfo(), which always snaps instantly.
+    const float STARTALPHA = g_pGlobalState->config.hoverToReveal->value() ? 0.F : 1.F;
+    Animation::mgr()->createAnimation(STARTALPHA, m_fHoverAlpha, Config::animationTree()->getAnimationPropertyConfig("border"), pWindow, AVARDAMAGE_NONE);
+    m_fHoverAlpha->setUpdateCallback([&](auto) { damageEntire(); });
 }
 
 CHyprBar::~CHyprBar() {
@@ -446,7 +452,11 @@ void CHyprBar::draw(PHLMONITOR pMonitor, const float& a) {
         g_pDecorationPositioner->repositionDeco(this);
     }
 
-    if (isCollapsed() || !validMapped(m_pWindow) || !ENABLED)
+    // isCollapsed() drives the reserved-space snap (positioning, input) and stays instant.
+    // Drawing additionally keeps going past that point while hover_to_reveal's fade-out
+    // animation is still playing, so the bar doesn't just vanish the instant it collapses.
+    const bool STILLFADING = g_pGlobalState->config.hoverToReveal->value() && m_fHoverAlpha->value() > 0.001F;
+    if (m_hidden || (isCollapsed() && !STILLFADING) || !validMapped(m_pWindow) || !ENABLED)
         return;
 
     const auto PWINDOW = m_pWindow.lock();
@@ -484,7 +494,11 @@ void CHyprBar::renderPass(PHLMONITOR pMonitor, const float& a) {
 
     CHyprColor color = m_cRealBarColor->value();
 
-    color.a *= a;
+    // fold the hover_to_reveal fade into the pass's own alpha, so it applies uniformly to the
+    // bar's fill, blur, title and buttons below without touching any of their own alpha logic.
+    const float EFFA = g_pGlobalState->config.hoverToReveal->value() ? a * m_fHoverAlpha->value() : a;
+
+    color.a *= EFFA;
     const bool BUTTONSRIGHT = ALIGNBUTTONS != "left";
     const bool SHOULDBLUR   = ENABLEBLUR && *PENABLEBLURGLOBAL && color.a < 1.F;
 
@@ -544,7 +558,7 @@ void CHyprBar::renderPass(PHLMONITOR pMonitor, const float& a) {
     }
 
     if (SHOULDBLUR)
-        g_pHyprOpenGL->renderRect(titleBarBox, color, {.round = scaledRounding, .roundingPower = m_pWindow->roundingPower(), .blur = true, .blurA = a});
+        g_pHyprOpenGL->renderRect(titleBarBox, color, {.round = scaledRounding, .roundingPower = m_pWindow->roundingPower(), .blur = true, .blurA = EFFA});
     else
         g_pHyprOpenGL->renderRect(titleBarBox, color, {.round = scaledRounding, .roundingPower = m_pWindow->roundingPower()});
 
@@ -582,15 +596,15 @@ void CHyprBar::renderPass(PHLMONITOR pMonitor, const float& a) {
         const auto yOffset           = std::round((BARBUF.y - m_pTextTex->m_size.y) / 2.0);
         CBox       titleBox          = {textBox.x + xOffset, textBox.y + yOffset, m_pTextTex->m_size.x, m_pTextTex->m_size.y};
 
-        g_pHyprOpenGL->renderTexture(m_pTextTex, titleBox, {.a = a});
+        g_pHyprOpenGL->renderTexture(m_pTextTex, titleBox, {.a = EFFA});
     }
 
-    renderBarButtons(&textBox, pMonitor->m_scale, a);
+    renderBarButtons(&textBox, pMonitor->m_scale, EFFA);
     m_bButtonsDirty = false;
 
     g_pHyprOpenGL->scissor(nullptr);
 
-    renderBarButtonsText(&textBox, pMonitor->m_scale, a);
+    renderBarButtonsText(&textBox, pMonitor->m_scale, EFFA);
 
     m_bWindowSizeChanged = false;
     m_bTitleColorChanged = false;
@@ -722,5 +736,6 @@ void CHyprBar::updateHoverReveal(Vector2D coords) {
         return;
 
     m_bHoverRevealed = wantReveal;
+    *m_fHoverAlpha   = wantReveal ? 1.F : 0.F;
     g_pDecorationPositioner->repositionDeco(this);
 }
