@@ -711,28 +711,15 @@ void CHyprBar::updateHoverReveal(Vector2D coords) {
 
     const auto WINPOS  = PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT) + PWINDOW->m_floatingOffset + WORKSPACEOFFSET;
     const auto WINSIZE = PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+    const auto HEIGHT  = g_pGlobalState->config.barHeight->value();
 
-    bool       wantReveal;
-
-    if (m_bHoverRevealed) {
-        // stay open across the full bar height. The bar renders ABOVE the window's content
-        // top (the reserved space is added there, content itself doesn't move), so the zone
-        // spans upward from the anchor, not into the content below it. Anchored to where the
-        // window's top edge was when it opened - NOT the live assigned box, which lags a frame
-        // behind the reveal toggling the reserved space and would otherwise snap shut immediately.
-        const auto HEIGHT = g_pGlobalState->config.barHeight->value();
-        wantReveal         = VECINRECT(coords, m_vHoverAnchor.x, m_vHoverAnchor.y - HEIGHT, m_vHoverAnchor.x + WINSIZE.x, m_vHoverAnchor.y);
-    } else {
-        // collapsed: only a thin strip at the window's own top edge wakes it up
-        const auto MARGIN = g_pGlobalState->config.hoverRevealMargin->value();
-        wantReveal         = VECINRECT(coords, WINPOS.x, WINPOS.y, WINPOS.x + WINSIZE.x, WINPOS.y + MARGIN);
-    }
+    // one zone, used both to trigger and to hold the reveal: the window's content top is a
+    // stable reference regardless of hover state (the bar renders ABOVE it in the reserved
+    // space, content itself never moves), so there's no need for a separate tiny trigger strip.
+    const bool wantReveal = VECINRECT(coords, WINPOS.x, WINPOS.y - HEIGHT, WINPOS.x + WINSIZE.x, WINPOS.y);
 
     if (wantReveal == m_bHoverRevealed)
         return;
-
-    if (wantReveal)
-        m_vHoverAnchor = WINPOS;
 
     m_bHoverRevealed = wantReveal;
     g_pDecorationPositioner->repositionDeco(this);

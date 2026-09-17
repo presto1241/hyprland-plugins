@@ -69,7 +69,6 @@ class CHyprBar : public IHyprWindowDecoration {
     bool                       m_bLastEnabledState  = false;
     bool                       m_bWindowHasFocus    = false;
     bool                       m_bHoverRevealed     = false;
-    Vector2D                   m_vHoverAnchor; // window top-left captured at the moment of reveal
     std::optional<CHyprColor>  m_bForcedBarColor;
     std::optional<CHyprColor>  m_bForcedTitleColor;
 
