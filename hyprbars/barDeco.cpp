@@ -58,6 +58,9 @@ CHyprBar::CHyprBar(PHLWINDOW pWindow) : IHyprWindowDecoration(pWindow) {
     const float STARTALPHA = g_pGlobalState->config.hoverToReveal->value() ? 0.F : 1.F;
     Animation::mgr()->createAnimation(STARTALPHA, m_fHoverAlpha, Config::animationTree()->getAnimationPropertyConfig("border"), pWindow, AVARDAMAGE_NONE);
     m_fHoverAlpha->setUpdateCallback([&](auto) { damageEntire(); });
+    // once the fade finishes, re-run positioning so a fully-collapsed bar's box actually
+    // shrinks back down instead of staying open-sized (and hit-testable) forever.
+    m_fHoverAlpha->setCallbackOnEnd([&](auto) { g_pDecorationPositioner->repositionDeco(this); });
 }
 
 CHyprBar::~CHyprBar() {
@@ -70,12 +73,19 @@ SDecorationPositioningInfo CHyprBar::getPositioningInfo() {
     const auto                 PRECEDENCE = g_pGlobalState->config.barPrecedenceOverBorder->value();
     const bool                 COLLAPSED  = isCollapsed();
 
+    // reserved space always snaps instantly on collapse, but the assigned box (what we actually
+    // render into) needs to stay STICKY and full-sized for as long as the fade-out is still
+    // playing - otherwise the positioner hands us a zeroed box (ABSOLUTE policy => empty reply)
+    // and draw()'s STILLFADING path has nothing left to draw, so the bar vanishes instantly.
+    const bool                 STILLFADING = g_pGlobalState->config.hoverToReveal->value() && m_fHoverAlpha->value() > 0.001F;
+    const bool                 VISIBLE     = ENABLED && (!COLLAPSED || STILLFADING);
+
     SDecorationPositioningInfo info;
-    info.policy         = COLLAPSED ? DECORATION_POSITION_ABSOLUTE : DECORATION_POSITION_STICKY;
+    info.policy         = VISIBLE ? DECORATION_POSITION_STICKY : DECORATION_POSITION_ABSOLUTE;
     info.edges          = DECORATION_EDGE_TOP;
     info.priority       = PRECEDENCE ? 10005 : 5000;
-    info.reserved       = true;
-    info.desiredExtents = {{0, COLLAPSED || !ENABLED ? 0 : HEIGHT}, {0, 0}};
+    info.reserved       = !COLLAPSED;
+    info.desiredExtents = {{0, VISIBLE ? HEIGHT : 0}, {0, 0}};
     return info;
 }
 
