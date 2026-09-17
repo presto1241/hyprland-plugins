@@ -706,27 +706,31 @@ void CHyprBar::updateHoverReveal(Vector2D coords) {
 
     const auto PWINDOW = m_pWindow.lock();
 
+    const auto PWORKSPACE      = PWINDOW->m_workspace;
+    const auto WORKSPACEOFFSET = PWORKSPACE && !PWINDOW->m_pinned ? PWORKSPACE->m_renderOffset->value() : Vector2D();
+
+    const auto WINPOS  = PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT) + PWINDOW->m_floatingOffset + WORKSPACEOFFSET;
+    const auto WINSIZE = PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+
     bool       wantReveal;
 
     if (m_bHoverRevealed) {
-        // stay open while the cursor is still over the now-visible bar
-        const auto BARBOX = assignedBoxGlobal();
-        wantReveal         = VECINRECT(coords, BARBOX.x, BARBOX.y, BARBOX.x + BARBOX.w, BARBOX.y + BARBOX.h);
+        // stay open across the full bar height, anchored to where the window's top edge was
+        // when it opened - NOT the live assigned box, which lags a frame behind the reveal
+        // toggling the reserved space and would otherwise snap shut immediately.
+        const auto HEIGHT = g_pGlobalState->config.barHeight->value();
+        wantReveal         = VECINRECT(coords, m_vHoverAnchor.x, m_vHoverAnchor.y, m_vHoverAnchor.x + WINSIZE.x, m_vHoverAnchor.y + HEIGHT);
     } else {
-        // collapsed: no box is assigned, so check against the window's own live top edge instead
+        // collapsed: only a thin strip at the window's own top edge wakes it up
         const auto MARGIN = g_pGlobalState->config.hoverRevealMargin->value();
-
-        const auto PWORKSPACE      = PWINDOW->m_workspace;
-        const auto WORKSPACEOFFSET = PWORKSPACE && !PWINDOW->m_pinned ? PWORKSPACE->m_renderOffset->value() : Vector2D();
-
-        const auto WINPOS  = PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT) + PWINDOW->m_floatingOffset + WORKSPACEOFFSET;
-        const auto WINSIZE = PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
-
-        wantReveal = VECINRECT(coords, WINPOS.x, WINPOS.y, WINPOS.x + WINSIZE.x, WINPOS.y + MARGIN);
+        wantReveal         = VECINRECT(coords, WINPOS.x, WINPOS.y, WINPOS.x + WINSIZE.x, WINPOS.y + MARGIN);
     }
 
     if (wantReveal == m_bHoverRevealed)
         return;
+
+    if (wantReveal)
+        m_vHoverAnchor = WINPOS;
 
     m_bHoverRevealed = wantReveal;
     g_pDecorationPositioner->repositionDeco(this);
