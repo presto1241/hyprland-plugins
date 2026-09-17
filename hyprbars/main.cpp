@@ -233,6 +233,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_pGlobalState->config.iconOnHover         = makeShared<Config::Values::CBoolValue>("plugin:hyprbars:icon_on_hover", "Whether to use an icon on hover of the buttons", false);
     g_pGlobalState->config.onDoubleClick       = makeShared<Config::Values::CStringValue>("plugin:hyprbars:on_double_click", "Action to execute on double click of the bar", "");
     g_pGlobalState->config.hoverToReveal       = makeShared<Config::Values::CBoolValue>("plugin:hyprbars:hover_to_reveal", "Whether the bar should stay collapsed until the mouse hovers the top of the window", false);
+    g_pGlobalState->config.iconFont            = makeShared<Config::Values::CStringValue>("plugin:hyprbars:icon_font", "Font used to render button icons (e.g. a Nerd Font for icon glyphs)", "sans");
 
     HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.barColor);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.textColor);
@@ -252,6 +253,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.enabled);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.iconOnHover);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.hoverToReveal);
+    HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.iconFont);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_pGlobalState->config.onDoubleClick);
 
     if (Config::mgr()->type() == Config::CONFIG_LEGACY)
