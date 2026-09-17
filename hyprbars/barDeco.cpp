@@ -62,14 +62,21 @@ SDecorationPositioningInfo CHyprBar::getPositioningInfo() {
     const auto                 HEIGHT     = g_pGlobalState->config.barHeight->value();
     const auto                 ENABLED    = g_pGlobalState->config.enabled->value();
     const auto                 PRECEDENCE = g_pGlobalState->config.barPrecedenceOverBorder->value();
+    const bool                 COLLAPSED  = isCollapsed();
 
     SDecorationPositioningInfo info;
-    info.policy         = m_hidden ? DECORATION_POSITION_ABSOLUTE : DECORATION_POSITION_STICKY;
+    info.policy         = COLLAPSED ? DECORATION_POSITION_ABSOLUTE : DECORATION_POSITION_STICKY;
     info.edges          = DECORATION_EDGE_TOP;
     info.priority       = PRECEDENCE ? 10005 : 5000;
     info.reserved       = true;
-    info.desiredExtents = {{0, m_hidden || !ENABLED ? 0 : HEIGHT}, {0, 0}};
+    info.desiredExtents = {{0, COLLAPSED || !ENABLED ? 0 : HEIGHT}, {0, 0}};
     return info;
+}
+
+// true if the bar rule hides it outright, or hover_to_reveal is on and the mouse
+// hasn't triggered a reveal yet - either way the bar takes up no layout space.
+bool CHyprBar::isCollapsed() {
+    return m_hidden || (g_pGlobalState->config.hoverToReveal->value() && !m_bHoverRevealed);
 }
 
 void CHyprBar::onPositioningReply(const SDecorationPositioningReply& reply) {
@@ -84,7 +91,7 @@ std::string CHyprBar::getDisplayName() {
 }
 
 bool CHyprBar::inputIsValid() {
-    if (m_hidden)
+    if (isCollapsed())
         return false;
 
     if (g_pSeatManager->m_seatGrab && !g_pSeatManager->m_seatGrab->accepts(m_pWindow->wlSurface()->resource()))
@@ -153,6 +160,9 @@ void CHyprBar::onMouseMove(Vector2D coords) {
     // ensure proper redraws of button icons on hover when using hardware cursors
     if (g_pGlobalState->config.iconOnHover->value())
         damageOnButtonHover();
+
+    if (g_pGlobalState->config.hoverToReveal->value())
+        updateHoverReveal(coords);
 
     if (!m_bDragPending || m_bTouchEv || !validMapped(m_pWindow) || m_touchId != 0)
         return;
@@ -436,7 +446,7 @@ void CHyprBar::draw(PHLMONITOR pMonitor, const float& a) {
         g_pDecorationPositioner->repositionDeco(this);
     }
 
-    if (m_hidden || !validMapped(m_pWindow) || !ENABLED)
+    if (isCollapsed() || !validMapped(m_pWindow) || !ENABLED)
         return;
 
     const auto PWINDOW = m_pWindow.lock();
@@ -688,4 +698,36 @@ void CHyprBar::damageOnButtonHover() {
 
         offset += BARBUTTONPADDING + b.size;
     }
+}
+
+void CHyprBar::updateHoverReveal(Vector2D coords) {
+    if (!validMapped(m_pWindow) || m_hidden)
+        return;
+
+    const auto PWINDOW = m_pWindow.lock();
+
+    bool       wantReveal;
+
+    if (m_bHoverRevealed) {
+        // stay open while the cursor is still over the now-visible bar
+        const auto BARBOX = assignedBoxGlobal();
+        wantReveal         = VECINRECT(coords, BARBOX.x, BARBOX.y, BARBOX.x + BARBOX.w, BARBOX.y + BARBOX.h);
+    } else {
+        // collapsed: no box is assigned, so check against the window's own live top edge instead
+        const auto MARGIN = g_pGlobalState->config.hoverRevealMargin->value();
+
+        const auto PWORKSPACE      = PWINDOW->m_workspace;
+        const auto WORKSPACEOFFSET = PWORKSPACE && !PWINDOW->m_pinned ? PWORKSPACE->m_renderOffset->value() : Vector2D();
+
+        const auto WINPOS  = PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT) + PWINDOW->m_floatingOffset + WORKSPACEOFFSET;
+        const auto WINSIZE = PWINDOW->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+
+        wantReveal = VECINRECT(coords, WINPOS.x, WINPOS.y, WINPOS.x + WINSIZE.x, WINPOS.y + MARGIN);
+    }
+
+    if (wantReveal == m_bHoverRevealed)
+        return;
+
+    m_bHoverRevealed = wantReveal;
+    g_pDecorationPositioner->repositionDeco(this);
 }

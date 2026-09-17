@@ -68,6 +68,7 @@ class CHyprBar : public IHyprWindowDecoration {
     bool                       m_bButtonHovered     = false;
     bool                       m_bLastEnabledState  = false;
     bool                       m_bWindowHasFocus    = false;
+    bool                       m_bHoverRevealed     = false;
     std::optional<CHyprColor>  m_bForcedBarColor;
     std::optional<CHyprColor>  m_bForcedTitleColor;
 
@@ -82,6 +83,9 @@ class CHyprBar : public IHyprWindowDecoration {
     void renderBarButtons(CBox* barBox, const float scale, const float a);
     void renderBarButtonsText(CBox* barBox, const float scale, const float a);
     void damageOnButtonHover();
+
+    bool isCollapsed();
+    void updateHoverReveal(Vector2D coords);
 
     bool inputIsValid();
     void onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e);
